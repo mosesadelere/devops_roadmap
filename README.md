@@ -1,4 +1,5 @@
-# devops_roadmap https://github.com/mosesadelere/devops_roadmap
+# devops_roadmap
+# project url https://roadmap.sh/projects/server-stats
 Explanation of the server-stats.sh script
 
     OS Version: Fetches the OS version from /etc/os-release.
