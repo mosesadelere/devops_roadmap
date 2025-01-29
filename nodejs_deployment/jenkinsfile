@@ -1,0 +1,75 @@
+pipeline {
+    agent any
+
+    environment {
+        DO_TOKEN = credentials('DO_TOKEN') // DigitalOcean API token
+        SSH_KEY_ID = credentials('SSH_KEY_ID') // SSH key ID for DigitalOcean
+        SSH_PRIVATE_KEY = credentials('SSH_PRIVATE_KEY') // Private SSH key for the server
+        SERVER_IP = '' // Will be populated during the Terraform step
+    }
+
+    stages {
+        stage('Checkout Code') {
+            steps {
+                git branch: 'main', url: 'https://github.com/<username>/node-app.git'
+            }
+        }
+
+        stage('Provision Server with Terraform') {
+            steps {
+                script {
+                    // Initialize Terraform
+                    sh 'terraform init'
+
+                    // Apply Terraform configuration to create the droplet
+                    sh """
+                    terraform apply -auto-approve \
+                        -var="do_token=${DO_TOKEN}" \
+                        -var="ssh_key_id=${SSH_KEY_ID}"
+                    """
+
+                    // Get the public IP of the droplet
+                    SERVER_IP = sh(script: 'terraform output -raw public_ip', returnStdout: true).trim()
+                    echo "Server IP: ${SERVER_IP}"
+                }
+            }
+        }
+
+        stage('Configure Server with Ansible') {
+            steps {
+                script {
+                    // Create an inventory file for Ansible
+                    writeFile file: 'inventory', text: """
+                    [webservers]
+                    ${SERVER_IP}
+                    """
+
+                    // Run the Ansible playbook
+                    sh """
+                    ansible-playbook -i inventory node_service.yml --tags app \
+                        --private-key ${SSH_PRIVATE_KEY} \
+                        -e "ansible_user=root"
+                    """
+                }
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                script {
+                    // Verify the application is running
+                    sh "curl http://${SERVER_IP}"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                // Destroy the Terraform resources (optional)
+                sh 'terraform destroy -auto-approve -var="do_token=${DO_TOKEN}" -var="ssh_key_id=${SSH_KEY_ID}"'
+            }
+        }
+    }
+}

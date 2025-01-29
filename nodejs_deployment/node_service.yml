@@ -1,0 +1,27 @@
+- hosts: all
+  become: yes
+  vars:
+    repo_url: "https://github.com/<username>/node-app.git"
+    app_dir: "/opt/node-app"
+  tasks:
+    - name: Install Node.js and npm
+      apt:
+        name:
+          - nodejs
+          - npm
+        update_cache: yes
+
+    - name: Clone the repository
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_dir }}"
+        version: main
+
+    - name: Install dependencies
+      npm:
+        path: "{{ app_dir }}"
+
+    - name: Start the application
+      command: "node {{ app_dir }}/index.js"
+      async: 500
+      poll: 0
